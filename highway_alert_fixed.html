@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Highway Alert System - V2V Broadcast</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,Arial,sans-serif;background:#10151c;color:#e8edf3}
+  header{padding:14px 18px;background:#0b0f14;border-bottom:1px solid #243040}
+  header h1{margin:0;font-size:20px}
+  header p{margin:4px 0 0;font-size:13px;color:#8fa1b5}
+  .wrap{display:flex;flex-wrap:wrap;gap:16px;padding:16px;justify-content:center}
+  .sim{display:flex;gap:8px;align-items:flex-start;max-width:100%}
+  .main{position:relative;width:480px;max-width:100%}
+  canvas{display:block;border-radius:12px;border:2px solid #243040;background:#2d6a3a}
+  #c{width:100%;height:auto}
+  #r{width:110px;height:auto;max-width:22vw}
+  #banner{position:absolute;left:10px;right:10px;top:10px;padding:10px 12px;border-radius:12px;display:none;align-items:center;gap:12px;box-shadow:0 6px 20px #0008}
+  #banner.danger{background:#c62828;animation:flash .6s infinite alternate}
+  #banner.warn{background:#ef8f00;color:#1b1200}
+  #banner img{width:46px;height:46px}
+  #banner b{display:block;font-size:16px}
+  #banner span{font-size:13px}
+  @keyframes flash{from{background:#c62828}to{background:#ff5252}}
+  .panel{width:360px;max-width:100%;display:flex;flex-direction:column;gap:12px}
+  .card{background:#18212c;border:1px solid #243040;border-radius:12px;padding:12px}
+  .card h3{margin:0 0 8px;font-size:13px;color:#8fa1b5;text-transform:uppercase;letter-spacing:.05em}
+  button{background:#2b6cb0;color:#fff;border:0;border-radius:8px;padding:8px 11px;font-size:13px;cursor:pointer;margin:3px 3px 3px 0}
+  button:hover{filter:brightness(1.15)}
+  button.red{background:#c62828}button.amber{background:#c77700}button.gray{background:#44515f}button.green{background:#2e8b57}button.purple{background:#6a45b8}
+  label{display:block;font-size:14px;margin:6px 0}
+  input[type=range]{width:100%}
+  #log{max-height:190px;overflow:auto;font-size:12.5px;padding-left:0;list-style:none;margin:0}
+  #log li{padding:6px 8px;border-radius:8px;margin-bottom:6px;background:#0f161e;border-left:4px solid #888}
+  #log li.danger{border-color:#ff5252}#log li.warn{border-color:#ffb300}#log li.info{border-color:#4aa3ff}#log li.net{border-color:#b388ff}
+  .vrow{display:grid;grid-template-columns:14px 52px 66px 1fr;gap:6px;align-items:center;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:13px;border:1px solid transparent}
+  .vrow:hover{background:#1f2b3a}
+  .vrow.sel{border-color:#4aa3ff;background:#162231}
+  .vrow i{width:12px;height:12px;border-radius:3px;display:block}
+  .vrow em{font-style:normal;color:#8fa1b5}
+  .ok{color:#66bb6a}.wr{color:#ffb300}.bad{color:#ff5252;font-weight:600}
+  .how{font-size:13px;line-height:1.55;color:#c5d1de;margin:0;padding-left:18px}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:#8fa1b5}
+  .legend div{display:flex;align-items:center;gap:6px}
+  .legend img{width:30px;height:30px}
+  small{color:#8fa1b5}
+</style>
+</head>
+<body>
+<header>
+  <h1>🚗 Highway Alert System — V2V Broadcast (Mini Project)</h1>
+  <p>One vehicle detects a hazard → alert is broadcast to every vehicle behind it • Sudden stop • Road damage • Accident • Blind person • Drunk driver • Bikes</p>
+</header>
+
+<div class="wrap">
+  <div class="sim">
+    <div class="main">
+      <canvas id="c" width="480" height="640"></canvas>
+      <div id="banner"><img id="bIcon" alt=""><div><b id="bTitle"></b><span id="bText"></span></div></div>
+    </div>
+    <canvas id="r" width="120" height="640"></canvas>
+  </div>
+
+  <div class="panel">
+    <div class="card">
+      <h3>Controls</h3>
+      <button id="btnStart" class="green">▶ Start</button>
+      <button id="btnReset" class="gray">⟲ Reset</button>
+      <button id="btnAuto" class="gray">🎬 Auto Demo</button><br>
+      <button id="btnStop" class="red">⛔ Sudden Stop</button>
+      <button id="btnPot" class="amber">🕳 Road Damage</button>
+      <button id="btnAcc" class="red">💥 Accident</button><br>
+      <button id="btnBlind" class="amber">🦯 Blind Person</button>
+      <button id="btnDrunk" class="purple">🍺 Drunk Driver</button>
+      <button id="btnBike" class="green">🏍 Add Bike</button><br>
+      <button id="btnOff" class="gray">Compare: Alerts OFF</button>
+      <button id="btnOn" class="purple">Compare: Alerts ON</button>
+      <label><input type="checkbox" id="alerts" checked> 📡 Broadcast alerts to vehicles behind (V2V)</label>
+      <label><input type="checkbox" id="sound" checked> Sound + voice alert (for the car you are viewing)</label>
+      <label>Speed: <b id="spdLabel">90</b> km/h
+        <input type="range" id="spd" min="40" max="120" value="90"></label>
+      <small>Click a vehicle in the list to see the road from that car. Keys ← → change lane.</small>
+    </div>
+
+    <div class="card">
+      <h3>Vehicles on the road</h3>
+      <div id="veh"></div>
+    </div>
+
+    <div class="card">
+      <h3>How other vehicles get the alert</h3>
+      <ol class="how">
+        <li>The vehicle that detects the event (hard braking, pothole sensor, crash sensor) sends a message.</li>
+        <li>The message travels by V2V radio / mobile network (cloud server, like Google Maps).</li>
+        <li>Every vehicle within 700 m <b>behind</b> the hazard receives it in about 0.25 s and slows down early.</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h3>Event log</h3>
+      <ul id="log"></ul>
+    </div>
+
+    <div class="card">
+      <h3>Legend</h3>
+      <div class="legend" id="legend"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- IMAGES (all SVG, no external files needed) ---------- */
+function carSvg(body){
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 80">
+  <rect x="3" y="2" width="34" height="76" rx="12" fill="${body}"/>
+  <rect x="7" y="16" width="26" height="14" rx="4" fill="#bfe3ff"/>
+  <rect x="7" y="52" width="26" height="12" rx="4" fill="#bfe3ff"/>
+  <rect x="9" y="32" width="22" height="18" rx="3" fill="#000" fill-opacity=".25"/>
+  <rect x="6" y="3" width="8" height="4" rx="2" fill="#fff7b0"/>
+  <rect x="26" y="3" width="8" height="4" rx="2" fill="#fff7b0"/>
+  <rect x="6" y="73" width="8" height="4" rx="2" fill="#7a1010"/>
+  <rect x="26" y="73" width="8" height="4" rx="2" fill="#7a1010"/></svg>`;
+}
+function bikeSvg(body){
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 56">
+  <rect x="10" y="3" width="4" height="15" rx="2" fill="#222"/>
+  <rect x="10" y="38" width="4" height="15" rx="2" fill="#222"/>
+  <rect x="9" y="14" width="6" height="28" rx="3" fill="${body}"/>
+  <rect x="3" y="15" width="18" height="3" rx="1.5" fill="#555"/>
+  <ellipse cx="12" cy="30" rx="6" ry="7" fill="#37474f"/>
+  <circle cx="12" cy="26" r="5" fill="#fff" stroke="#b0bec5" stroke-width="1"/>
+  <rect x="10" y="49" width="4" height="3" rx="1" fill="#c62828"/></svg>`;
+}
+const truckSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 110">
+  <rect x="4" y="2" width="36" height="26" rx="8" fill="#e53935"/>
+  <rect x="9" y="8" width="26" height="10" rx="3" fill="#bfe3ff"/>
+  <rect x="3" y="30" width="38" height="78" rx="4" fill="#eceff1" stroke="#90a4ae" stroke-width="2"/>
+  <rect x="3" y="30" width="38" height="8" fill="#b0bec5"/>
+  <rect x="6" y="103" width="9" height="4" rx="2" fill="#7a1010"/>
+  <rect x="29" y="103" width="9" height="4" rx="2" fill="#7a1010"/></svg>`;
+const potholeSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 54">
+  <ellipse cx="40" cy="28" rx="34" ry="20" fill="#3a3a3a"/>
+  <ellipse cx="40" cy="30" rx="26" ry="14" fill="#151515"/>
+  <path d="M6 22 L0 12 M14 10 L8 2 M66 8 L72 1 M74 30 L80 34 M12 44 L4 52" stroke="#666" stroke-width="3" fill="none"/>
+  <path d="M30 24 L38 30 L34 36" stroke="#444" stroke-width="2" fill="none"/></svg>`;
+const accidentSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 150">
+  <g transform="rotate(-28 40 80)"><svg x="20" y="30" width="40" height="80" viewBox="0 0 40 80">
+    <rect x="3" y="2" width="34" height="76" rx="12" fill="#8e24aa"/><rect x="7" y="16" width="26" height="14" rx="4" fill="#bfe3ff"/>
+    <rect x="9" y="32" width="22" height="18" rx="3" fill="#6a1b7a"/><rect x="7" y="52" width="26" height="12" rx="4" fill="#bfe3ff"/></svg></g>
+  <g transform="rotate(40 80 80)"><svg x="62" y="40" width="40" height="80" viewBox="0 0 40 80">
+    <rect x="3" y="2" width="34" height="76" rx="12" fill="#f9a825"/><rect x="7" y="16" width="26" height="14" rx="4" fill="#bfe3ff"/>
+    <rect x="9" y="32" width="22" height="18" rx="3" fill="#c17f00"/><rect x="7" y="52" width="26" height="12" rx="4" fill="#bfe3ff"/></svg></g>
+  <circle cx="60" cy="60" r="14" fill="#ff7043" opacity=".9"/><circle cx="60" cy="56" r="8" fill="#ffd54f"/>
+  <circle cx="48" cy="30" r="9" fill="#9e9e9e" opacity=".7"/><circle cx="68" cy="22" r="12" fill="#757575" opacity=".6"/>
+  <polygon points="60,112 82,148 38,148" fill="#e53935" stroke="#fff" stroke-width="3"/>
+  <rect x="58" y="124" width="4" height="12" fill="#fff"/><rect x="58" y="139" width="4" height="4" fill="#fff"/></svg>`;
+const iconStop = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><polygon points="20,4 44,4 60,20 60,44 44,60 20,60 4,44 4,20" fill="#fff"/><polygon points="22,10 42,10 54,22 54,42 42,54 22,54 10,42 10,22" fill="#d32f2f"/><text x="32" y="38" font-size="17" font-weight="bold" text-anchor="middle" fill="#fff" font-family="Arial">STOP</text></svg>`;
+const iconWarn = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><polygon points="32,5 61,58 3,58" fill="#fff"/><polygon points="32,12 54,54 10,54" fill="#ffb300"/><rect x="29.5" y="25" width="5" height="16" fill="#222"/><rect x="29.5" y="45" width="5" height="5" fill="#222"/></svg>`;
+const iconAcc = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="29" fill="#fff"/><circle cx="32" cy="32" r="24" fill="#c62828"/><path d="M32 12 L37 26 L52 24 L41 34 L48 48 L32 40 L16 48 L23 34 L12 24 L27 26 Z" fill="#ffd54f"/></svg>`;
+
+const iconBlind = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><polygon points="32,5 61,58 3,58" fill="#fff"/><polygon points="32,12 54,54 10,54" fill="#ffb300"/><circle cx="30" cy="27" r="4" fill="#222"/><rect x="27" y="31" width="6" height="12" fill="#222"/><path d="M33 33 L44 50" stroke="#fff" stroke-width="2.5"/></svg>`;
+const iconDrunk = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="29" fill="#fff"/><circle cx="32" cy="32" r="24" fill="#c62828"/><rect x="28" y="12" width="8" height="10" fill="#fff"/><rect x="24" y="22" width="16" height="30" rx="4" fill="#fff"/><rect x="27" y="34" width="10" height="10" fill="#c62828"/></svg>`;
+const uri = s => 'data:image/svg+xml;utf8,' + encodeURIComponent(s);
+const mk = s => { const i = new Image(); i.src = uri(s); return i; };
+const IMG = { truck: mk(truckSvg), pothole: mk(potholeSvg), accident: mk(accidentSvg) };
+const carImgs = {};
+const imgFor = V => V.truck ? IMG.truck : V.bike ? (carImgs['b'+V.color] || (carImgs['b'+V.color] = mk(bikeSvg(V.color)))) : (carImgs[V.color] || (carImgs[V.color] = mk(carSvg(V.color))));
+const ICON = {stop:uri(iconStop), pothole:uri(iconWarn), accident:uri(iconAcc), collision:uri(iconAcc), blind:uri(iconBlind), drunk:uri(iconDrunk)};
+
+document.getElementById('legend').innerHTML =
+  `<div><img src="${uri(carSvg('#1e88e5'))}"> Cars</div>
+   <div><img src="${uri(truckSvg)}"> Truck</div>
+   <div><img src="${uri(potholeSvg)}"> Road damage</div>
+   <div><img src="${uri(accidentSvg)}"> Accident</div>
+   <div><img src="${uri(bikeSvg('#ffd600'))}"> Bike</div>
+   <div><img src="${uri(iconBlind)}"> Blind person</div>
+   <div><img src="${uri(iconDrunk)}"> Drunk driver</div>`;
+
+/* ---------- SETUP ---------- */
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const rcv = document.getElementById('r'), rctx = rcv.getContext('2d');
+const W=480, H=640, PX=4, PY=440, LANE=72, ROADX=(W-LANE*3)/2, RANGE=700;
+const laneX = l => ROADX + LANE*l + LANE/2;
+const $ = id => document.getElementById(id);
+let S, audio, lastT=0, bannerTimer;
+const getV = id => S.v.find(v => v.id === id);
+const getSel = () => getV(S.sel);
+
+function reset(){
+  const c = $('spd').value/3.6;
+  const keepSel = S ? S.sel : 'A';
+  const mkV = (id,name,lane,pos,color,truck,bike) => ({id,name,lane,x:laneX(lane),pos,speed:c,color,truck:!!truck, bike:!!bike,
+      len:truck?18:(bike?7:12), w:truck?30:(bike?12:24), crashed:false, forceBrake:false, resumeAt:0, seen:{}, alert:null,
+      lastHard:-99, decel:0, braking:false});
+  S = { t:0, running:false, nid:1, ped:null, hazards:[], q:[], waves:[], ev:[], lastCrashBc:-99, sel:keepSel,
+        v:[ mkV('T','Truck',1,90,null,true), mkV('E','Car E',0,45,'#8d6e63'), mkV('A','You',1,0,'#1e88e5'),
+            mkV('B','Car B',1,-36,'#43a047'), mkV('C','Car C',1,-72,'#fb8c00'), mkV('D','Car D',2,-30,'#00acc1'),
+            mkV('F','Bike 1',2,30,'#ffd600',false,true), mkV('G','Bike 2',0,-20,'#ec407a',false,true) ] };
+  $('log').innerHTML=''; hideBanner();
+  $('btnStart').textContent='▶ Start';
+  addLog('info','System ready. Press Start.');
+  draw(); drawRadar(); updateStatus();
+}
+function sched(sec, fn){ S.ev.push({at:S.t+sec, fn}); }
+
+/* ---------- ALERTS ---------- */
+const MSG = {
+  stop:     {lvl:'danger', short:'SUDDEN STOP', title:'SUDDEN STOP AHEAD!', text:d=>`A vehicle ahead braked hard, ${d} m ahead. Slow down now!`, say:'Warning! Sudden stop ahead. Slow down.'},
+  pothole:  {lvl:'warn',   short:'ROAD DAMAGE', title:'ROAD DAMAGE AHEAD',  text:d=>`Damaged road / pothole in ${d} m. Reduce speed.`,          say:'Caution. Road damage ahead. Reduce speed.'},
+  accident: {lvl:'danger', short:'ACCIDENT',    title:'ACCIDENT AHEAD!',    text:d=>`Accident reported ${d} m ahead. Lane may be blocked.`,     say:'Alert! Accident ahead. Slow down.'},
+  blind:    {lvl:'danger', short:'BLIND PERSON', title:'BLIND PERSON ON ROAD!', text:d=>`A blind person is crossing ${d} m ahead. Stop and wait!`, say:'Warning! Blind person crossing the road ahead. Stop.'},
+  drunk:    {lvl:'danger', short:'DRUNK DRIVER', title:'DRUNK DRIVER NEARBY!', text:d=>`A drunk driver is ${d} m away, weaving across lanes. Keep a safe distance!`, say:'Warning! Drunk driver nearby. Keep your distance.'},
+  collision:{lvl:'danger', short:'COLLISION',   title:'COLLISION!',         text:d=>`Your car crashed. Press Reset to try again.`,              say:'Collision detected.'}
+};
+function showBanner(icon, title, text, lvl){
+  $('bIcon').src = icon; $('bTitle').textContent = title; $('bText').textContent = text;
+  const b = $('banner'); b.className = lvl; b.style.display='flex';
+  clearTimeout(bannerTimer); bannerTimer = setTimeout(hideBanner, 6000);
+}
+function hideBanner(){ $('banner').style.display='none'; }
+function bannerFor(V){
+  const a = V.alert; if(!a){ hideBanner(); return; }
+  const m = MSG[a.kind], dv = a.ref && getV(a.ref), d = dv ? Math.round(Math.abs(dv.pos - V.pos)) : Math.max(0, Math.round(a.hazPos - V.pos)), same = a.always || a.lane === V.lane;
+  showBanner(ICON[a.kind], V.name + ': ' + m.title,
+    same ? m.text(d) : `Hazard is in lane ${a.lane+1}, ${d} m ahead. You are in lane ${V.lane+1}. Stay alert.`,
+    same ? m.lvl : 'warn');
+}
+function alertSound(kind){
+  const m = MSG[kind];
+  if(!$('alerts').checked || !$('sound').checked) return;
+  beep(m.lvl==='danger'?3:2, m.lvl==='danger'?880:600);
+  try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(m.say); u.lang='en-IN'; speechSynthesis.speak(u);}catch(e){}
+}
+function addLog(lvl,text){
+  const li=document.createElement('li'); li.className=lvl;
+  li.textContent = new Date().toLocaleTimeString()+'  —  '+text;
+  $('log').prepend(li);
+}
+function beep(n,freq){
+  if(!audio) return;
+  for(let i=0;i<n;i++){
+    const o=audio.createOscillator(), g=audio.createGain();
+    o.frequency.value=freq; o.connect(g); g.connect(audio.destination);
+    const t=audio.currentTime+i*0.22; g.gain.setValueAtTime(0.15,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.18);
+    o.start(t); o.stop(t+0.2);
+  }
+}
+
+/* ---------- V2V BROADCAST ---------- */
+// src detects an event -> message goes out -> every vehicle BEHIND the hazard (within RANGE) receives it after ~0.25 s
+function broadcast(src, kind, hazPos){
+  S.waves.push({x:src.x, pos:src.pos, t:S.t});
+  const names=[];
+  S.v.forEach(V=>{
+    if(V===src || V.crashed || V.pos >= hazPos || hazPos - V.pos > RANGE) return;
+    names.push(V.name);
+    S.q.push({at:S.t+0.25, id:V.id, kind, hazPos, lane:src.lane, from:src.name});
+  });
+  addLog('net', `📡 ${src.name} broadcast: ${MSG[kind].title}  →  ${names.length ? names.join(', ') : 'nobody in range'}`);
+}
+// proximity broadcast (both directions) - used for a drunk driver who can appear beside / in front of other cars
+function broadcastNear(src, kind, R){
+  S.waves.push({x:src.x, pos:src.pos, t:S.t});
+  const names=[];
+  S.v.forEach(V=>{
+    if(V===src || V.crashed || Math.abs(V.pos-src.pos) > R) return;
+    names.push(V.name);
+    S.q.push({at:S.t+0.25, id:V.id, kind, hazPos:src.pos, lane:src.lane, from:src.name, near:true, ref:src.id});
+  });
+  addLog('net', `📡 ${src.name} broadcast: ${MSG[kind].title}  →  ${names.length ? names.join(', ') : 'nobody in range'}`);
+}
+function deliver(m){
+  const V = getV(m.id);
+  if(!V || V.crashed || (!m.near && V.pos >= m.hazPos)) return;
+  V.alert = {kind:m.kind, hazPos:m.hazPos, lane:m.lane, from:m.from, ref:m.ref, always:m.near || m.kind==='blind', until:S.t+(m.near?30:(m.kind==='blind'?12:8))};
+  addLog('info', `📩 ${V.name} received "${MSG[m.kind].short}" from ${m.from} (${Math.round(m.hazPos-V.pos)} m before the hazard)`);
+  if(V.id === S.sel){ bannerFor(V); alertSound(m.kind); }
+}
+
+/* ---------- EVENTS ---------- */
+function suddenStop(){
+  const T = getV('T'); if(T.forceBrake || T.crashed) return;
+  T.forceBrake = true; T.resumeAt = 0;
+  addLog('warn','⛔ Truck brakes suddenly');
+}
+function addHazard(type){
+  const sv = getSel();
+  let front = sv.pos;
+  S.v.forEach(V => { if(V.lane === sv.lane && V.pos > front) front = V.pos; });
+  const h = {id:S.nid++, type, lane:sv.lane, pos:front+220, reported:false};
+  S.hazards.push(h);
+  addLog('warn', (type==='accident'?'💥 Accident':'🕳 Road damage')+' created in lane '+(h.lane+1)+' ahead');
+  if(type==='accident' && $('alerts').checked){
+    h.reported = true;
+    broadcast({name:'Crashed vehicles', x:laneX(h.lane), pos:h.pos, lane:h.lane, id:'ACC'}, 'accident', h.pos);
+  }
+}
+// is lane l safe to move into? (no car close alongside, no hazard / blind person just ahead)
+function laneFree(V, l){
+  return S.v.every(W => W===V || !(W.lane===l || Math.abs(W.x-laneX(l)) < LANE*0.6) || W.pos-V.pos < -30 || W.pos-V.pos > 40)
+    && !S.hazards.some(h => h.lane===l && h.pos-V.pos > -15 && h.pos-V.pos < 90)
+    && !(S.ped && !S.ped.hit && S.ped.pos-V.pos > -10 && S.ped.pos-V.pos < 140);
+}
+function addBike(){
+  const nb = S.v.filter(V => V.bike).length;
+  if(nb >= 5){ addLog('info','Maximum 5 bikes on the road'); return; }
+  const sv = getSel(), pos = sv.pos + 30 + Math.random()*20;
+  const l = [0,1,2].find(k => laneFree({pos}, k));
+  if(l === undefined){ addLog('info','No free space for a bike right now'); return; }
+  const cols = ['#ffd600','#ec407a','#26c6da','#ab47bc','#ff7043'], n = nb+1;
+  S.v.push({id:'K'+S.nid, name:'Bike '+n, lane:l, x:laneX(l), pos, speed:$('spd').value/3.6, color:cols[nb%5], truck:false, bike:true,
+    len:7, w:12, crashed:false, forceBrake:false, resumeAt:0, seen:{}, alert:null, lastHard:-99, decel:0, braking:false});
+  S.nid++;
+  addLog('info','🏍 Bike '+n+' joins the road in lane '+(l+1));
+}
+function addBlind(){
+  if(S.ped) return;
+  const sv = getSel();
+  const p = {x:ROADX-12, pos:sv.pos+170, hit:false, reported:false};
+  S.ped = p;
+  addLog('warn','🦯 Blind person starts crossing the road ahead');
+  if($('alerts').checked){ p.reported = true; broadcast({name:'Smart cane', x:p.x, pos:p.pos, lane:1, id:'PED'}, 'blind', p.pos); }
+}
+function addDrunk(){
+  if(getV('X')) return;
+  const sv = getSel(), pos = sv.pos+40;
+  const l = [2,0,1].find(k => laneFree({pos}, k));
+  const lane = l===undefined ? 2 : l;
+  const D = {id:'X', name:'Drunk', lane, x:laneX(lane), pos, speed:$('spd').value/3.6*0.85, color:'#e91e63', truck:false,
+    len:12, w:24, crashed:false, forceBrake:false, resumeAt:0, seen:{}, alert:null, lastHard:-99, decel:0, braking:false,
+    drunk:true, nextSwerve:S.t+1.5};
+  S.v.push(D);
+  addLog('danger','🍺 Alcohol sensor: driver of "Drunk" car is drunk and weaving across lanes');
+  if($('alerts').checked) broadcastNear(D, 'drunk', 300);
+}
+function crash(V){
+  if(V.crashed) return;
+  V.crashed = true; V.speed = 0; V.forceBrake = false; V.alert = null;
+  addLog('danger', '💥 '+V.name+' crashed');
+  if(V.id === S.sel && $('alerts').checked){ showBanner(ICON.collision, 'COLLISION!', MSG.collision.text(0), 'danger'); alertSound('collision'); }
+  if($('alerts').checked && S.t - S.lastCrashBc > 2){ S.lastCrashBc = S.t; broadcast(V, 'accident', V.pos); }
+}
+
+/* ---------- UPDATE ---------- */
+const safeV = (vb,g,a) => Math.sqrt(vb*vb + 2*a*Math.max(0,g-6));
+
+function step(V, dt, cruise, on){
+  if(V.crashed){ V.speed=0; V.braking=false; return; }
+  const a = on ? 6 : 7;
+  let limit = V.drunk ? cruise*0.85 : cruise, blk = false;
+  const seenNow = {};
+
+  // vehicles ahead in my lane
+  S.v.forEach(Wv => {
+    if(Wv===V || Wv.pos<=V.pos || Math.abs(Wv.x-V.x) > LANE*(Wv.drunk?1.5:0.6)) return;
+    const g = Wv.pos - V.pos - (Wv.len+V.len)/2;
+    if(on && g < 180 && Wv.speed < V.speed*0.5) blk = true;     // something ahead has almost stopped
+    const er = Wv.drunk;                                       // a weaving car is noticed early, even without alerts
+    const rng = on ? RANGE : (er?90:60), dl = on ? 0.25 : (er?0.5:1.4);       // alerts ON: see far + react fast
+    const rel = Wv.speed < V.speed-1.5 || Wv.speed < 2;
+    let use = g < 30 && Wv.speed < cruise-1;                  // very close: always careful
+    if(g < rng && rel){
+      seenNow[Wv.id]=1; if(V.seen[Wv.id]===undefined) V.seen[Wv.id]=S.t;
+      if(S.t - V.seen[Wv.id] >= dl) use = true;
+    }
+    if(use) limit = Math.min(limit, safeV(Wv.speed, g, a));
+  });
+
+  // road hazards in my lane
+  S.hazards.forEach(h => {
+    if(Math.abs(laneX(h.lane)-V.x) > LANE*0.6) return;
+    const g = h.pos - V.pos - (h.type==='accident' ? V.len/2+10 : V.len/2);
+    if(g <= 0) return;
+    if(on && g < 180 && (h.reported || g < 60)) blk = true;
+    const net = on && h.reported, rng = net ? RANGE : 60, dl = net ? 0.25 : 1.4;
+    if(g < rng){
+      const k='h'+h.id; seenNow[k]=1; if(V.seen[k]===undefined) V.seen[k]=S.t;
+      if(S.t - V.seen[k] >= dl){
+        if(h.type==='accident') limit = Math.min(limit, Math.sqrt(2*a*Math.max(0,g-4)));
+        else limit = Math.min(limit, 11 + Math.max(0,g-50)*0.5);
+      }
+    }
+    if(on && !h.reported && g < 45){ h.reported = true; broadcast(V, h.type, h.pos); }   // sensor detects it first
+  });
+  // blind person on the road: must stop and wait (cannot be overtaken)
+  const pd = S.ped;
+  if(pd && !pd.hit && pd.pos > V.pos && pd.x > ROADX-40 && pd.x < ROADX+LANE*3+40){
+    const g = pd.pos - V.pos - V.len/2 - 4, net = on && pd.reported, rng = net ? RANGE : 45, dl = net ? 0.25 : 1.4;
+    if(g < rng){
+      seenNow.ped = 1; if(V.seen.ped === undefined) V.seen.ped = S.t;
+      if(S.t - V.seen.ped >= dl) limit = Math.min(limit, Math.sqrt(2*a*Math.max(0, g-6)));
+    }
+  }
+  // sudden stop / hazard ahead (alert ON): change lane and keep moving instead of everybody stopping behind it
+  if(on && blk && !V.forceBrake && !V.drunk && S.t - (V.lcAt||-99) > 3){
+    const opt = [V.lane-1, V.lane+1].filter(l => l>=0 && l<=2 && laneFree(V,l));
+    if(opt.length){ V.lane = opt[0]; V.lcAt = S.t; addLog('info','↪ '+V.name+' moves to lane '+(V.lane+1)+' to pass the hazard instead of stopping'); }
+  }
+  Object.keys(V.seen).forEach(k => { if(!seenNow[k]) delete V.seen[k]; });
+
+  if(V.forceBrake) limit = 0;
+  const dec = V.forceBrake ? 14 : 8, prev = V.speed;
+  if(V.speed > limit) V.speed = Math.max(limit, V.speed - dec*dt);
+  else V.speed = Math.min(limit, V.speed + 3*dt);
+  V.decel = dt>0 ? (prev - V.speed)/dt : 0;
+  V.braking = V.decel > 1.5;
+  if(on && V.decel > 6.5 && S.t - V.lastHard > 6){ V.lastHard = S.t; broadcast(V, 'stop', V.pos); }   // hard braking detected
+  V.pos += V.speed*dt;
+  V.x += (laneX(V.lane)-V.x)*Math.min(1, (V.drunk?2:4)*dt);
+  if(V.alert && S.t > V.alert.until) V.alert = null;
+}
+
+function update(dt){
+  S.t += dt;
+  const cruise = $('spd').value/3.6, on = $('alerts').checked;
+  while(S.ev.length){ const i = S.ev.findIndex(e => e.at <= S.t); if(i<0) break; S.ev.splice(i,1)[0].fn(); }
+  const T = getV('T');
+  if(T.forceBrake && !T.crashed){
+    if(T.speed <= 0.01 && T.resumeAt === 0) T.resumeAt = S.t + 10;
+    if(T.resumeAt > 0 && S.t > T.resumeAt){ T.forceBrake=false; T.resumeAt=0; addLog('info','Truck moves again'); }
+  }
+  S.v.forEach(V => { if(V.drunk && !V.crashed && S.t > V.nextSwerve){
+    V.nextSwerve = S.t + 1.2 + Math.random()*1.3; let l; do{ l = Math.floor(Math.random()*3); }while(l === V.lane); if(laneFree(V,l)) V.lane = l; } });
+  const P = S.ped;
+  if(P && !P.hit){ P.x += 24*dt;
+    if(P.x > ROADX + LANE*3 + 20){ S.ped = null; S.v.forEach(V => { if(V.alert && V.alert.kind==='blind') V.alert = null; });
+      addLog('info','🦯 Blind person reached the other side safely'); } }
+  while(S.q.length && S.q[0].at <= S.t) deliver(S.q.shift());
+  S.v.forEach(V => step(V, dt, cruise, on));
+
+  // collisions
+  S.v.forEach(V => {
+    if(V.crashed) return;
+    S.v.forEach(Wv => {
+      if(Wv===V || Wv.pos<=V.pos || Math.abs(Wv.x-V.x) > LANE*0.6) return;
+      if(Wv.pos - V.pos - (Wv.len+V.len)/2 <= 0 && V.speed > 1){ V.pos = Wv.pos - (Wv.len+V.len)/2; crash(V); crash(Wv); }
+    });
+    S.hazards.forEach(h => {
+      if(h.type!=='accident' || Math.abs(laneX(h.lane)-V.x) > LANE*0.6) return;
+      const g = h.pos - V.pos - (V.len/2+10);
+      if(g <= 0 && g > -14 && V.speed > 1) crash(V);
+    });
+  });
+  const pp = S.ped;
+  if(pp && !pp.hit) S.v.forEach(V => {
+    if(!V.crashed && V.speed > 1 && pp.pos - V.pos - V.len/2 <= 0 && pp.pos - V.pos > -V.len/2 && Math.abs(pp.x - V.x) < V.w/2 + 10){
+      pp.hit = true; addLog('danger','💥 '+V.name+' hit the blind person!'); crash(V); } });
+  const minPos = Math.min(...S.v.map(V=>V.pos));
+  S.hazards = S.hazards.filter(h => h.pos > minPos - 200);
+  S.waves = S.waves.filter(w => S.t - w.t < 1.4);
+}
+
+/* ---------- DRAW ---------- */
+function draw(){
+  const SV = getSel(), yOf = q => PY-(q-SV.pos)*PX;
+  ctx.fillStyle='#2d6a3a'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#3b3f45'; ctx.fillRect(ROADX,0,LANE*3,H);
+  ctx.fillStyle='#fff'; ctx.fillRect(ROADX-4,0,4,H); ctx.fillRect(ROADX+LANE*3,0,4,H);
+  const off=((SV.pos*PX)%60+60)%60;
+  ctx.fillStyle='#e8e8e8';
+  for(let l=1;l<3;l++) for(let y=-60+off;y<H;y+=60) ctx.fillRect(ROADX+LANE*l-2,y,4,30);
+  ctx.fillStyle='#1b4d28';
+  for(let y=-100+(((SV.pos*PX)%100)+100)%100; y<H; y+=100){ ctx.beginPath(); ctx.arc(34,y,16,0,7); ctx.arc(W-34,y+40,16,0,7); ctx.fill(); }
+
+  // hazards
+  S.hazards.forEach(h => { const y=yOf(h.pos), x=laneX(h.lane);
+    if(y<-150||y>H+150) return;
+    if(h.type==='pothole') ctx.drawImage(IMG.pothole,x-34,y-23,68,46);
+    else ctx.drawImage(IMG.accident,x-46,y-58,92,115);
+  });
+  // blind person
+  if(S.ped){ const p=S.ped, y=yOf(p.pos);
+    if(y>-60 && y<H+60){
+      ctx.fillStyle='rgba(255,179,0,.3)'; ctx.beginPath(); ctx.arc(p.x,y,24,0,7); ctx.fill();
+      ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(p.x+6,y+12); ctx.lineTo(p.x+24,y-10); ctx.stroke();
+      ctx.fillStyle='#ffd54f'; ctx.beginPath(); ctx.arc(p.x,y-12,6,0,7); ctx.fill();
+      ctx.fillStyle='#ff7043'; ctx.fillRect(p.x-6,y-6,12,18);
+      ctx.textAlign='center'; ctx.font='bold 11px Arial'; ctx.fillStyle='#fff'; ctx.fillText(p.hit?'HIT!':'Blind person',p.x,y-26);
+    } }
+  // vehicles
+  ctx.textAlign='center';
+  S.v.forEach(V => {
+    const y=yOf(V.pos), h=V.len*PX, w=V.w;
+    if(y<-100||y>H+100) return;
+    ctx.drawImage(imgFor(V), V.x-w/2, y-h/2, w, h);
+    if(V.braking){
+      ctx.fillStyle='rgba(255,40,40,.95)';
+      if(V.bike) ctx.fillRect(V.x-3,y+h/2-3,6,4); else { ctx.fillRect(V.x-w/2+3,y+h/2-4,8,5); ctx.fillRect(V.x+w/2-11,y+h/2-4,8,5); }
+      ctx.fillStyle='rgba(255,60,60,.22)'; ctx.beginPath(); ctx.arc(V.x,y+h/2,26,0,7); ctx.fill();
+    }
+    if(V.crashed){ ctx.fillStyle='rgba(255,120,0,.65)'; ctx.beginPath(); ctx.arc(V.x,y,24,0,7); ctx.fill(); }
+    if(V.id===S.sel){ ctx.strokeStyle='#4aa3ff'; ctx.lineWidth=2; ctx.strokeRect(V.x-w/2-3,y-h/2-3,w+6,h+6); }
+    ctx.font='bold 12px Arial'; ctx.fillStyle='#fff'; ctx.fillText(V.name, V.x, y-h/2-7);
+    if(V.alert){ ctx.fillStyle='#e53935'; ctx.beginPath(); ctx.arc(V.x+w/2+8,y-h/2+6,9,0,7); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.font='bold 13px Arial'; ctx.fillText('!',V.x+w/2+8,y-h/2+11); }
+  });
+  // broadcast rings
+  S.waves.forEach(w => { const age=S.t-w.t, r=age*380;
+    ctx.strokeStyle=`rgba(179,136,255,${Math.max(0,1-age/1.4)})`; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(w.x, yOf(w.pos), r, 0, 7); ctx.stroke(); });
+  // HUD
+  ctx.textAlign='left';
+  ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(10,H-52,150,42);
+  ctx.fillStyle='#fff'; ctx.font='bold 22px Arial'; ctx.fillText(Math.round(SV.speed*3.6)+' km/h',18,H-23);
+  ctx.font='11px Arial'; ctx.fillStyle='#b9c6d4'; ctx.fillText('view: '+SV.name, 18, H-12);
+}
+
+function drawRadar(){
+  const SV = getSel(), g = rctx, RW=120, r0=-250, r1=150;
+  const yR = q => (SV.pos + r1 - q)/(r1-r0)*H;
+  g.fillStyle='#10151c'; g.fillRect(0,0,RW,H);
+  g.fillStyle='#232c37'; g.fillRect(12,0,96,H);
+  g.strokeStyle='#3a4655'; g.lineWidth=1;
+  for(let l=0;l<=3;l++){ g.beginPath(); g.moveTo(12+l*32,0); g.lineTo(12+l*32,H); g.stroke(); }
+  g.font='10px Arial'; g.fillStyle='#6f8196'; g.textAlign='left';
+  for(let d=-200; d<=100; d+=100){ const y=yR(SV.pos+d); g.fillRect(0,y,8,1); g.fillText(d>0?'+'+d:String(d),0,y-2); }
+  S.waves.forEach(w => { const a=1-(S.t-w.t)/1.4; g.fillStyle=`rgba(179,136,255,${0.3*Math.max(0,a)})`;
+    const y0=yR(w.pos), y1=yR(w.pos-RANGE); g.fillRect(12,y0,96,y1-y0); });
+  S.hazards.forEach(h => { const y=yR(h.pos), x=12+h.lane*32+16;
+    if(h.type==='pothole'){ g.fillStyle='#111'; g.beginPath(); g.ellipse(x,y,10,6,0,0,7); g.fill(); g.strokeStyle='#ffb300'; g.stroke(); }
+    else { g.fillStyle='#e53935'; g.beginPath(); g.moveTo(x,y-9); g.lineTo(x+9,y+7); g.lineTo(x-9,y+7); g.fill(); } });
+  g.textAlign='center';
+  if(S.ped){ const y=yR(S.ped.pos), x=12+(S.ped.x-ROADX)/LANE*32; g.fillStyle='#ffb300'; g.beginPath(); g.arc(x,y,5,0,7); g.fill(); }
+  S.v.forEach(V => { const y=yR(V.pos), x=12+V.lane*32+16, hh=V.truck?16:(V.bike?8:12);
+    g.fillStyle=V.crashed?'#ff7043':(V.color||'#e53935'); g.fillRect(x-7,y-hh/2,14,hh);
+    if(V.alert){ g.strokeStyle='#ff5252'; g.lineWidth=2; g.strokeRect(x-9,y-hh/2-2,18,hh+4); }
+    if(V.id===S.sel){ g.strokeStyle='#fff'; g.lineWidth=1.5; g.strokeRect(x-10,y-hh/2-3,20,hh+6); }
+    g.fillStyle='#fff'; g.font='bold 9px Arial'; g.fillText(V.id,x,y+3); });
+  g.fillStyle='#8fa1b5'; g.font='bold 10px Arial'; g.fillText('RADAR',60,12);
+  g.fillText('ahead ▲',60,24);
+}
+
+function updateStatus(){
+  $('veh').innerHTML = S.v.map(V => {
+    let st='<span class="ok">driving</span>';
+    if(V.crashed) st='<span class="bad">💥 CRASHED</span>';
+    else if(V.alert){ const same=V.alert.always||V.alert.lane===V.lane;
+      st=`<span class="${same?'bad':'wr'}">⚠ ${MSG[V.alert.kind].short}${same?'':' (lane '+(V.alert.lane+1)+')'}</span>`; }
+    else if(V.braking) st='<span class="wr">braking</span>';
+    return `<div class="vrow ${V.id===S.sel?'sel':''}" data-id="${V.id}"><i style="background:${V.color||'#e53935'}"></i><b>${V.name}</b><em>${Math.round(V.speed*3.6)} km/h</em><span>${st}</span></div>`;
+  }).join('');
+}
+
+/* ---------- LOOP ---------- */
+function loop(ts){
+  const dt=Math.min(0.05,(ts-lastT)/1000||0); lastT=ts;
+  if(S.running) update(dt);
+  draw(); drawRadar();
+  if(Math.floor(ts/200)!==loop.k){ loop.k=Math.floor(ts/200); updateStatus(); }
+  requestAnimationFrame(loop);
+}
+
+/* ---------- UI ---------- */
+function startRun(){
+  if(!audio){ try{ audio=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  if(!S.running){ S.running=true; $('btnStart').textContent='⏸ Pause'; addLog('info','Journey started.'); }
+}
+$('btnStart').onclick=()=>{
+  if(!S.running) startRun(); else { S.running=false; $('btnStart').textContent='▶ Resume'; }
+};
+$('btnReset').onclick=reset;
+$('btnStop').onclick=()=>{ startRun(); suddenStop(); };
+$('btnPot').onclick =()=>{ startRun(); addHazard('pothole'); };
+$('btnAcc').onclick =()=>{ startRun(); addHazard('accident'); };
+$('btnBike').onclick=()=>{ startRun(); addBike(); };
+$('btnBlind').onclick=()=>{ startRun(); addBlind(); };
+$('btnDrunk').onclick=()=>{ startRun(); addDrunk(); };
+function compare(on){
+  reset(); $('alerts').checked=on; startRun();
+  addLog('info', on ? 'Compare: alerts ON - truck will brake suddenly in 3 s' : 'Compare: alerts OFF - truck will brake suddenly in 3 s');
+  sched(3, suddenStop);
+}
+$('btnOff').onclick=()=>compare(false);
+$('btnOn').onclick =()=>compare(true);
+$('btnAuto').onclick=()=>{
+  reset(); $('alerts').checked=true; startRun();
+  sched(1, ()=>addHazard('pothole'));
+  sched(14, suddenStop);
+  sched(34, ()=>addHazard('accident'));
+  sched(52, addBlind);
+  sched(78, addDrunk);
+};
+// turning alerts OFF removes every alert that is already on screen
+$('alerts').onchange=()=>{
+  if(!$('alerts').checked){
+    S.q.length = 0; S.waves.length = 0;
+    S.v.forEach(V => V.alert = null);
+    hideBanner();
+    try{ speechSynthesis.cancel(); }catch(e){}
+    addLog('info','Alerts OFF: no warnings will be shown to drivers');
+  } else addLog('info','Alerts ON: V2V warnings enabled');
+};
+$('spd').oninput=e=>$('spdLabel').textContent=e.target.value;
+$('veh').onclick=e=>{
+  const row=e.target.closest('.vrow'); if(!row) return;
+  S.sel=row.dataset.id; bannerFor(getSel()); updateStatus();
+};
+document.addEventListener('keydown',e=>{
+  if(!S) return;
+  const V=getSel();
+  if(e.key==='ArrowLeft')  V.lane=Math.max(0,V.lane-1);
+  if(e.key==='ArrowRight') V.lane=Math.min(2,V.lane+1);
+});
+reset(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>
